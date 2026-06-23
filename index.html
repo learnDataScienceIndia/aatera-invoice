@@ -73,24 +73,23 @@
       background:linear-gradient(90deg, var(--green) 0%, var(--blue) 100%);
     }
 
-    /* Info strip — 3 columns: Company | Get in touch | Logo */
+    /* Info strip — 2 columns: Logo | Details */
     .info-strip{
-      display:grid;
-      grid-template-columns:1fr 1fr auto;
+      display:flex;
+      justify-content:space-between;
       align-items:center;
       border-bottom:2px solid var(--border);
       background:var(--grey);
+      padding:13px 18px;
     }
-    .info-cell{padding:13px 18px;}
-    .info-cell:first-child{border-right:1.5px solid var(--border);}
-    .info-cell:nth-child(2){border-right:1.5px solid var(--border);}
+    .info-details{
+      text-align:right;
+    }
 
     /* Logo column inside info strip */
     .info-logo{
-      padding:10px 16px;
       display:flex;
       align-items:center;
-      justify-content:center;
     }
     .info-logo img{
       width:220px;
@@ -375,10 +374,17 @@
       Apply VAT (5%)
     </label>
   </div>
-  <button class="btn btn-print" onclick="window.print()">
-    <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
-    Print / Save as PDF
-  </button>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <button class="btn btn-add" onclick="saveJSON()">💾 Save JSON</button>
+    <label class="btn btn-add" style="margin:0; cursor:pointer;">
+      📂 Load JSON
+      <input type="file" id="jsonUpload" accept=".json" style="display:none;" onchange="loadJSON(event)">
+    </label>
+    <button class="btn btn-print" onclick="window.print()">
+      <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+      Print / Save as PDF
+    </button>
+  </div>
 </div>
 
 <!-- ══════════ INVOICE DOCUMENT ══════════ -->
@@ -389,20 +395,17 @@
     <div class="top-bar"></div>
 
     <div class="info-strip">
-      <div class="info-cell">
-        <div class="co-name" contenteditable="true" id="coName">AATERA LOOP Battery Recycling</div>
-      </div>
-      <div class="info-cell">
-        <div class="touch-lbl" contenteditable="true" id="touchLbl">Get in touch</div>
-        <div class="touch-body">
-          Email us at <span contenteditable="true" id="coEmail">info@aatera.com</span><br/>
-          or call us at <span contenteditable="true" id="coPhone">+971 543252882</span><br/>
-          <span contenteditable="true" id="coAddr">AATERA LOOP Battery Recycling RA08 TC05, JAFZA, Dubai, UAE</span>
-        </div>
-      </div>
       <!-- Logo column -->
       <div class="info-logo">
         <img src="logo.png" alt="Aatera Logo"/>
+      </div>
+      <!-- Details column -->
+      <div class="info-details">
+        <div class="co-name" contenteditable="true" id="coName" style="margin-bottom: 4px;">AATERA LOOP Battery Recycling</div>
+        <div class="touch-body">
+          <span contenteditable="true" id="coAddr">AATERA LOOP Battery Recycling RA08 TC05, JAFZA, Dubai, UAE</span><br/>
+          Phone: <span contenteditable="true" id="coPhone">+971 543252882</span> | Email: <span contenteditable="true" id="coEmail">info@aatera.com</span>
+        </div>
       </div>
     </div>
   </header>
@@ -566,19 +569,17 @@
   <header class="po-header">
     <div class="top-bar"></div>
     <div class="info-strip">
-      <div class="info-cell">
-        <div class="co-name">AATERA LOOP Battery Recycling</div>
-      </div>
-      <div class="info-cell">
-        <div class="touch-lbl">Get in touch</div>
-        <div class="touch-body">
-          Email us at info@aatera.com<br/>
-          or call us at +971 543252882<br/>
-          AATERA LOOP Battery Recycling RA08 TC05, JAFZA, Dubai, UAE
-        </div>
-      </div>
+      <!-- Logo column -->
       <div class="info-logo">
         <img src="logo.png" alt="Aatera Logo"/>
+      </div>
+      <!-- Details column -->
+      <div class="info-details">
+        <div class="co-name" style="margin-bottom: 4px;">AATERA LOOP Battery Recycling</div>
+        <div class="touch-body">
+          AATERA LOOP Battery Recycling RA08 TC05, JAFZA, Dubai, UAE<br/>
+          Phone: +971 543252882 | Email: info@aatera.com
+        </div>
       </div>
     </div>
   </header>
@@ -821,6 +822,148 @@
   function updateRowCount() {
     const c = document.querySelectorAll('#tbody tr').length;
     document.getElementById('rowCnt').textContent = `${c} row${c!==1?'s':''}`;
+  }
+
+  /* ── Save / Load JSON ── */
+  function saveJSON() {
+    const data = {
+      curCode,
+      coreColsRemoved,
+      vatChecked: document.getElementById('vatCheck')?.checked || false,
+      inputs: {},
+      contentEditables: {},
+      customCols: [],
+      rows: []
+    };
+
+    const inputIds = ['invNo', 'invDate', 'billCoName', 'billTrn', 'billAddr', 'billName', 'billPhone', 'billEmail', 'payTerms', 'bankName', 'accName', 'accNum', 'ibanNum'];
+    inputIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) data.inputs[id] = el.value;
+    });
+
+    const ceIds = ['coName', 'coAddr', 'coPhone', 'coEmail'];
+    ceIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) data.contentEditables[id] = el.innerHTML;
+    });
+    const sigLbl = document.querySelector('.sig-line-lbl');
+    if (sigLbl) data.contentEditables['sigLbl'] = sigLbl.innerHTML;
+
+    customCols.forEach(colId => {
+      const th = document.querySelector(`th.custom-col-${colId} div[contenteditable]`);
+      data.customCols.push({ id: colId, header: th ? th.innerHTML : 'Custom' });
+    });
+
+    document.querySelectorAll('#tbody tr').forEach(tr => {
+      const rowData = {
+        desc: tr.querySelector('.dtd .expand-input')?.innerHTML || '',
+        qty: tr.querySelector('.qi')?.value || '',
+        price: tr.querySelector('.ri')?.value || '',
+        customData: {}
+      };
+      customCols.forEach(colId => {
+        const tdDiv = tr.querySelector(`td.custom-col-${colId} .expand-input`);
+        if (tdDiv) rowData.customData[colId] = tdDiv.innerHTML;
+      });
+      data.rows.push(rowData);
+    });
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+    const a = document.createElement('a');
+    a.href = dataStr;
+    a.download = "invoice_data.json";
+    a.click();
+  }
+
+  function loadJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.inputs) {
+          for (const [id, val] of Object.entries(data.inputs)) {
+            const el = document.getElementById(id);
+            if (el) el.value = val;
+          }
+        }
+        if (data.contentEditables) {
+          for (const [id, val] of Object.entries(data.contentEditables)) {
+            if (id === 'sigLbl') {
+              const sigLbl = document.querySelector('.sig-line-lbl');
+              if (sigLbl) sigLbl.innerHTML = val;
+            } else {
+              const el = document.getElementById(id);
+              if (el) el.innerHTML = val;
+            }
+          }
+        }
+        if (data.curCode) {
+          curCode = data.curCode;
+          const curSel = document.getElementById('curSel');
+          if (curSel) curSel.value = curCode;
+        }
+        if (data.vatChecked !== undefined) {
+          const vatCheck = document.getElementById('vatCheck');
+          if (vatCheck) {
+            vatCheck.checked = data.vatChecked;
+          }
+        }
+        [...customCols].forEach(colId => removeColumn(colId));
+        coreColsRemoved = data.coreColsRemoved || { qty: false, price: false };
+        document.getElementById('th-qty').style.display = coreColsRemoved.qty ? 'none' : '';
+        document.getElementById('th-price').style.display = coreColsRemoved.price ? 'none' : '';
+        if (data.customCols) {
+          data.customCols.forEach(col => {
+            customCols.push(col.id);
+            const theadTr = document.querySelector('#itemTbl thead tr');
+            const thQty = document.getElementById('th-qty');
+            const newTh = document.createElement('th');
+            newTh.className = `custom-col-${col.id}`;
+            newTh.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; gap:4px;"><div contenteditable="true" style="min-width:40px; border-bottom:1px dashed rgba(255,255,255,0.4);">${col.header}</div> <button class="rm-col-btn no-print" onclick="removeColumn('${col.id}')" title="Remove Column">✕</button></div>`;
+            theadTr.insertBefore(newTh, thQty);
+          });
+          updateFooters();
+        }
+        const tbody = document.getElementById('tbody');
+        tbody.innerHTML = '';
+        rowId = 0;
+        if (data.rows && data.rows.length > 0) {
+          data.rows.forEach(r => {
+            addRow();
+            const tr = tbody.lastElementChild;
+            const desc = tr.querySelector('.dtd .expand-input');
+            if (desc) desc.innerHTML = r.desc;
+            const qi = tr.querySelector('.qi');
+            if (qi) qi.value = r.qty;
+            const ri = tr.querySelector('.ri');
+            if (ri) ri.value = r.price;
+            if (r.customData) {
+              for (const [colId, val] of Object.entries(r.customData)) {
+                const tdDiv = tr.querySelector(`td.custom-col-${colId} .expand-input`);
+                if (tdDiv) tdDiv.innerHTML = val;
+              }
+            }
+            const q = coreColsRemoved.qty ? 1 : (parseFloat(r.qty) || 0);
+            const p = coreColsRemoved.price ? 1 : (parseFloat(r.price) || 0);
+            const ai = tr.querySelector('.ai');
+            if (!coreColsRemoved.qty || !coreColsRemoved.price) {
+              if (q > 0 && p > 0) ai.value = (q * p).toFixed(2);
+            }
+          });
+        } else {
+          addRow();
+        }
+        applyCurrency(); // Handles symbols headers and triggers recalcTotal
+        event.target.value = '';
+      } catch (err) {
+        alert("Error parsing JSON file!");
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
   }
 </script>
 
