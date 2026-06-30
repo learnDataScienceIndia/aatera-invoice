@@ -689,8 +689,26 @@
   document.addEventListener('DOMContentLoaded', () => {
     const d  = new Date();
     const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    document.getElementById('invDate').value = `${d.getDate()}-${mo[d.getMonth()]}-${d.getFullYear()}`;
-    for (let i = 0; i < 8; i++) addRow();
+    
+    // Check local storage for saved data
+    const savedData = localStorage.getItem('aatera_invoice_data');
+    if (savedData) {
+      try {
+        const data = JSON.parse(savedData);
+        applyInvoiceData(data);
+      } catch (e) {
+        document.getElementById('invDate').value = `${d.getDate()}-${mo[d.getMonth()]}-${d.getFullYear()}`;
+        for (let i = 0; i < 8; i++) addRow();
+      }
+    } else {
+      document.getElementById('invDate').value = `${d.getDate()}-${mo[d.getMonth()]}-${d.getFullYear()}`;
+      for (let i = 0; i < 8; i++) addRow();
+    }
+
+    // Auto save every 2 seconds
+    setInterval(() => {
+      localStorage.setItem('aatera_invoice_data', JSON.stringify(getInvoiceData()));
+    }, 2000);
   });
 
   /* ── Add Column ── */
@@ -867,7 +885,7 @@
   }
 
   /* ── Save / Load JSON ── */
-  function saveJSON() {
+  function getInvoiceData() {
     const data = {
       curCode,
       coreColsRemoved,
@@ -911,6 +929,88 @@
       data.rows.push(rowData);
     });
 
+    return data;
+  }
+
+  function applyInvoiceData(data) {
+    if (data.inputs) {
+      for (const [id, val] of Object.entries(data.inputs)) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+      }
+    }
+    if (data.contentEditables) {
+      for (const [id, val] of Object.entries(data.contentEditables)) {
+        if (id === 'sigLbl') {
+          const sigLbl = document.querySelector('.sig-line-lbl');
+          if (sigLbl) sigLbl.innerHTML = val;
+        } else {
+          const el = document.getElementById(id);
+          if (el) el.innerHTML = val;
+        }
+      }
+    }
+    if (data.curCode) {
+      curCode = data.curCode;
+      const curSel = document.getElementById('curSel');
+      if (curSel) curSel.value = curCode;
+    }
+    if (data.vatChecked !== undefined) {
+      const vatCheck = document.getElementById('vatCheck');
+      if (vatCheck) {
+        vatCheck.checked = data.vatChecked;
+      }
+    }
+    [...customCols].forEach(colId => removeColumn(colId));
+    coreColsRemoved = data.coreColsRemoved || { qty: false, price: false };
+    document.getElementById('th-qty').style.display = coreColsRemoved.qty ? 'none' : '';
+    document.getElementById('th-price').style.display = coreColsRemoved.price ? 'none' : '';
+    if (data.customCols) {
+      data.customCols.forEach(col => {
+        customCols.push(col.id);
+        const theadTr = document.querySelector('#itemTbl thead tr');
+        const thQty = document.getElementById('th-qty');
+        const newTh = document.createElement('th');
+        newTh.className = `custom-col-${col.id}`;
+        newTh.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; gap:4px;"><div contenteditable="true" style="min-width:40px; border-bottom:1px dashed rgba(255,255,255,0.4);">${col.header}</div> <button class="rm-col-btn no-print" onclick="removeColumn('${col.id}')" title="Remove Column">✕</button></div>`;
+        theadTr.insertBefore(newTh, thQty);
+      });
+      updateFooters();
+    }
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    rowId = 0;
+    if (data.rows && data.rows.length > 0) {
+      data.rows.forEach(r => {
+        addRow();
+        const tr = tbody.lastElementChild;
+        const desc = tr.querySelector('.dtd .expand-input');
+        if (desc) desc.innerHTML = r.desc;
+        const qi = tr.querySelector('.qi');
+        if (qi) qi.value = r.qty;
+        const ri = tr.querySelector('.ri');
+        if (ri) ri.value = r.price;
+        if (r.customData) {
+          for (const [colId, val] of Object.entries(r.customData)) {
+            const tdDiv = tr.querySelector(`td.custom-col-${colId} .expand-input`);
+            if (tdDiv) tdDiv.innerHTML = val;
+          }
+        }
+        const q = coreColsRemoved.qty ? 1 : (parseFloat(r.qty) || 0);
+        const p = coreColsRemoved.price ? 1 : (parseFloat(r.price) || 0);
+        const ai = tr.querySelector('.ai');
+        if (!coreColsRemoved.qty || !coreColsRemoved.price) {
+          if (q > 0 && p > 0) ai.value = (q * p).toFixed(2);
+        }
+      });
+    } else {
+      addRow();
+    }
+    applyCurrency(); // Handles symbols headers and triggers recalcTotal
+  }
+
+  function saveJSON() {
+    const data = getInvoiceData();
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
     const a = document.createElement('a');
     a.href = dataStr;
@@ -925,80 +1025,7 @@
     reader.onload = e => {
       try {
         const data = JSON.parse(e.target.result);
-        if (data.inputs) {
-          for (const [id, val] of Object.entries(data.inputs)) {
-            const el = document.getElementById(id);
-            if (el) el.value = val;
-          }
-        }
-        if (data.contentEditables) {
-          for (const [id, val] of Object.entries(data.contentEditables)) {
-            if (id === 'sigLbl') {
-              const sigLbl = document.querySelector('.sig-line-lbl');
-              if (sigLbl) sigLbl.innerHTML = val;
-            } else {
-              const el = document.getElementById(id);
-              if (el) el.innerHTML = val;
-            }
-          }
-        }
-        if (data.curCode) {
-          curCode = data.curCode;
-          const curSel = document.getElementById('curSel');
-          if (curSel) curSel.value = curCode;
-        }
-        if (data.vatChecked !== undefined) {
-          const vatCheck = document.getElementById('vatCheck');
-          if (vatCheck) {
-            vatCheck.checked = data.vatChecked;
-          }
-        }
-        [...customCols].forEach(colId => removeColumn(colId));
-        coreColsRemoved = data.coreColsRemoved || { qty: false, price: false };
-        document.getElementById('th-qty').style.display = coreColsRemoved.qty ? 'none' : '';
-        document.getElementById('th-price').style.display = coreColsRemoved.price ? 'none' : '';
-        if (data.customCols) {
-          data.customCols.forEach(col => {
-            customCols.push(col.id);
-            const theadTr = document.querySelector('#itemTbl thead tr');
-            const thQty = document.getElementById('th-qty');
-            const newTh = document.createElement('th');
-            newTh.className = `custom-col-${col.id}`;
-            newTh.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; gap:4px;"><div contenteditable="true" style="min-width:40px; border-bottom:1px dashed rgba(255,255,255,0.4);">${col.header}</div> <button class="rm-col-btn no-print" onclick="removeColumn('${col.id}')" title="Remove Column">✕</button></div>`;
-            theadTr.insertBefore(newTh, thQty);
-          });
-          updateFooters();
-        }
-        const tbody = document.getElementById('tbody');
-        tbody.innerHTML = '';
-        rowId = 0;
-        if (data.rows && data.rows.length > 0) {
-          data.rows.forEach(r => {
-            addRow();
-            const tr = tbody.lastElementChild;
-            const desc = tr.querySelector('.dtd .expand-input');
-            if (desc) desc.innerHTML = r.desc;
-            const qi = tr.querySelector('.qi');
-            if (qi) qi.value = r.qty;
-            const ri = tr.querySelector('.ri');
-            if (ri) ri.value = r.price;
-            if (r.customData) {
-              for (const [colId, val] of Object.entries(r.customData)) {
-                const tdDiv = tr.querySelector(`td.custom-col-${colId} .expand-input`);
-                if (tdDiv) tdDiv.innerHTML = val;
-              }
-            }
-            const q = coreColsRemoved.qty ? 1 : (parseFloat(r.qty) || 0);
-            const p = coreColsRemoved.price ? 1 : (parseFloat(r.price) || 0);
-            const ai = tr.querySelector('.ai');
-            if (!coreColsRemoved.qty || !coreColsRemoved.price) {
-              if (q > 0 && p > 0) ai.value = (q * p).toFixed(2);
-            }
-          });
-        } else {
-          addRow();
-        }
-        applyCurrency(); // Handles symbols headers and triggers recalcTotal
+        applyInvoiceData(data);
         event.target.value = '';
       } catch (err) {
         alert("Error parsing JSON file!");
